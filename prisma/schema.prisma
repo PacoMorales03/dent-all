@@ -1,0 +1,136 @@
+generator client {
+  provider        = "prisma-client-js"
+  output          = "../generated/prisma"
+  previewFeatures = ["clientExtensions"]
+  engineType      = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Clinic {
+  id             String           @id(map: "clinica_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String?
+  phone          String?
+  address        String?
+  Appointments   Appointments[]
+  Cabinets       Cabinets[]
+  ClinicPatients ClinicPatients[]
+  ClinicUser     ClinicUser[]
+}
+
+model ClinicUser {
+  clinicId   String      @db.Uuid
+  userId     String
+  role       clinic_role
+  created_at DateTime?   @default(now()) @db.Timestamptz(6)
+  updated_at DateTime?   @default(now()) @db.Timestamptz(6)
+  User       User        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_1")
+  Clinic     Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_clinic")
+
+  @@id([clinicId, userId], map: "PK")
+  @@unique([clinicId, userId], map: "unique_clinic_user")
+  @@index([clinicId], map: "idx_clinicuser_clinicid")
+  @@index([userId], map: "idx_clinicuser_userid")
+}
+
+model User {
+  id          String        @id
+  email       String?
+  ClinicUser  ClinicUser[]
+  Dentist     Dentist[]
+  DentistUser DentistUser[]
+  Patient     Patient[]
+}
+
+model Appointments {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicID    String?             @db.Uuid
+  patientId   String?             @db.Uuid
+  dentistId   String?             @db.Uuid
+  cabinetId   String?             @db.Uuid
+  description String?
+  status      appointment_status?
+  startAt     DateTime?           @db.Timestamptz(6)
+  endAt       DateTime?           @db.Timestamptz(6)
+  Clinic      Clinic?             @relation(fields: [clinicID], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "constraint_1")
+  Patient     Patient?            @relation(fields: [patientId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "constraint_2")
+  Cabinets    Cabinets?           @relation(fields: [cabinetId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_3")
+}
+
+model Cabinets {
+  id           String         @id(map: "cabinets_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId     String         @db.Uuid
+  num          Int
+  description  String?
+  createdAt    DateTime?      @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime?      @default(now()) @db.Timestamptz(6)
+  Appointments Appointments[]
+  Clinic       Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "constraint_1")
+}
+
+model ClinicPatients {
+  clinicId  String  @db.Uuid
+  PatientId String  @db.Uuid
+  Clinic    Clinic  @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_2")
+  Patient   Patient @relation(fields: [PatientId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_3")
+
+  @@id([clinicId, PatientId], map: "constraint_1")
+}
+
+model Dentist {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentType document_type?
+  name         String?
+  surname      String?
+  phone        String?
+  specialty    String?
+  userId       String?
+  User         User?          @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_1")
+  DentistUser  DentistUser[]
+}
+
+model DentistUser {
+  DentistId String  @db.Uuid
+  userId    String
+  Dentist   Dentist @relation(fields: [DentistId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "constraint_2")
+  User      User    @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_3")
+
+  @@id([DentistId, userId], map: "DentistUserId")
+}
+
+model Patient {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String?
+  document_hash  String?          @unique
+  name           String?
+  surname        String?
+  phone          String?
+  documetType    document_type?
+  Appointments   Appointments[]
+  ClinicPatients ClinicPatients[]
+  User           User?            @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_1")
+}
+
+enum clinic_role {
+  owner
+  admin
+  reception
+  dentist
+}
+
+enum appointment_status {
+  scheduled
+  cancelled
+  completed
+  no_show
+}
+
+enum document_type {
+  NATIONAL_ID
+  PASSPORT
+  TAX_ID
+  DRIVER_LICENSE
+  OTHER
+}
