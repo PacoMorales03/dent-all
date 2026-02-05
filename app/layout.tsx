@@ -21,14 +21,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <ClerkProvider>
       <html lang="en">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${geistSans.variable} ${geistMono.variable} antialiased h-screen flex flex-col`}
         >
           <LanguageProvider>
             <header className="fixed top-0 left-0 right-0 z-50 bg-gray-100 h-16 flex items-center justify-between px-4">
@@ -37,7 +35,11 @@ export default function RootLayout({
                 <UserButton />
               </SignedIn>
             </header>
-            <main>{children}</main>
+
+            {/* Main con margen arriba igual al header, ocupa resto y permite scroll */}
+            <main className="grow pt-16">
+              {children}
+            </main>
           </LanguageProvider>
         </body>
       </html>

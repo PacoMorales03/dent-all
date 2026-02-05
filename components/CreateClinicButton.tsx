@@ -34,6 +34,7 @@ export function CreateClinicButton() {
       setLoading(false);
       return;
     }
+    
 
     try {
       const res = await fetch("/api/clinics", {
@@ -60,7 +61,7 @@ export function CreateClinicButton() {
       setPhone("");
       setAddress("");
     } catch (e) {
-      setError("Network or server error");
+      setError("Network or server error " + e);
     } finally {
       setLoading(false);
     }

@@ -43,7 +43,7 @@ export default async function Layout({
     <SidebarProvider>
       <AppSidebar />
       <main>
-        <SidebarTrigger className="fixed top-15" />
+        <SidebarTrigger className="fixed top-15 z-50"/>
         {children}
       </main>
     </SidebarProvider>
