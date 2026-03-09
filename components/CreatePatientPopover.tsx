@@ -4,13 +4,17 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@radix-ui/react-label";
-import { IconUserPlus } from "@tabler/icons-react";
+import { Label } from "@/components/ui/label";
+import { IconUserPlus, IconUser, IconPhone } from "@tabler/icons-react";
 import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type Patient = {
   id: string;
@@ -48,8 +52,8 @@ export default function CreatePatientPopover({ onCreated }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          surname: surname.trim(),
-          phone: phone.trim(),
+          surname: surname.trim() || undefined,
+          phone: phone.trim() || undefined,
         }),
       });
 
@@ -86,51 +90,127 @@ export default function CreatePatientPopover({ onCreated }: Props) {
     }
   };
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!loading) {
+      setOpen(newOpen);
+      if (!newOpen) {
+        // Reset cuando se cierra sin crear
+        setName("");
+        setSurname("");
+        setPhone("");
+        setError("");
+      }
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleCreate();
+    }
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
         <Button
           variant="ghost"
           size="sm"
           className="w-full justify-start gap-2"
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen(true);
-          }}
         >
           <IconUserPlus className="w-4 h-4" />
           Crear nuevo paciente
         </Button>
-      </PopoverTrigger>
+      </DialogTrigger>
 
-      <PopoverContent
-        side="right"
-        align="start"
-        className="w-64 p-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="grid gap-2">
-          <Label>Nombre</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
+      <DialogContent className="sm:max-w-106.25" onKeyDown={handleKeyDown}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <IconUser className="w-5 h-5" />
+            Nuevo paciente
+          </DialogTitle>
+          <DialogDescription>
+            Añade un nuevo paciente a tu clínica. El nombre es el único campo obligatorio.
+          </DialogDescription>
+        </DialogHeader>
 
-          <Label>Apellidos</Label>
-          <Input value={surname} onChange={(e) => setSurname(e.target.value)} />
-
-          <Label>Teléfono</Label>
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-
-          {error && <p className="text-xs text-red-600">{error}</p>}
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
-              Cancelar
-            </Button>
-            <Button size="sm" onClick={handleCreate} disabled={loading}>
-              {loading ? "Creando..." : "Crear"}
-            </Button>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="name" className="flex items-center gap-1">
+              Nombre <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ej: María"
+              disabled={loading}
+              autoFocus
+            />
           </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="surname">Apellidos</Label>
+            <Input
+              id="surname"
+              value={surname}
+              onChange={(e) => setSurname(e.target.value)}
+              placeholder="Ej: García López"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="phone" className="flex items-center gap-2">
+              <IconPhone className="w-4 h-4" />
+              Teléfono
+            </Label>
+            <Input
+              id="phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Ej: 600 123 456"
+              disabled={loading}
+              type="tel"
+            />
+          </div>
+
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3">
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            </div>
+          )}
         </div>
-      </PopoverContent>
-    </Popover>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={loading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            onClick={handleCreate}
+            disabled={loading || !name.trim()}
+            className="gap-2"
+          >
+            {loading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Creando...
+              </>
+            ) : (
+              <>
+                <IconUserPlus className="w-4 h-4" />
+                Crear paciente
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

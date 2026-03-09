@@ -8,7 +8,7 @@ export default function AnimatedWelcome() {
 
   return (
     <Typewriter
-      key={lang} // 🔑 reinicia animación cuando cambia el idioma
+      key={lang}
       text={t('platform_animated_welcome')}
     />
   );

@@ -3,12 +3,19 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 
 export async function GET(req: Request) {
+  const { userId } = await auth(); // ← añadir esto
+  if (!userId) return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const clinicId = searchParams.get("clinicId");
+  if (!clinicId) return NextResponse.json({ error: 'clinicId requerido' }, { status: 400 });
 
-  if (!clinicId) {
-    return new NextResponse("clinicId is required", { status: 400 });
-  }
+  // ← añadir verificación de membresía
+  const membership = await prisma.clinicUser.findUnique({
+    where: { clinicId_userId: { clinicId, userId } },
+  });
+  if (!membership) return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
+
 
   const relations = await prisma.clinicPatients.findMany({
     where: {

@@ -24,8 +24,8 @@ const items = [
     icon: Inbox,
   },
   {
-    title: "Calendar",
-    urlTemplate: "#",
+    title: "Cabinets",
+    urlTemplate: "/platform/clinic/[id]/cabinets",
     icon: Calendar,
   },
   {

@@ -1,28 +1,37 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  format,
-  startOfWeek,
-  addWeeks,
-  isSameDay,
-  addDays as addDaysDate,
-} from "date-fns";
+import { format, startOfWeek, addWeeks, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
-import CreateAppointmentButton from "./CreateAppointmentButton";
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
+import CreateAppointmentButton from "./CreateAppointmentButton";
+import AppointmentItem from "./AppointmentItem";
+import SelectDentistsOnAppointments from "./SelectDentistsOnAppointments";
+import SelectCabinetsOnAppointments from "./SelectCabinetsOnAppointments";
+
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
+
+const HOURS = Array.from({ length: 16 }, (_, i) => i + 7);
 const PX_PER_MINUTE = 1.2;
+const TOTAL_MINUTES = HOURS.length * 60;
 
 type AppointmentStatus = "scheduled" | "completed" | "no_show" | "cancelled";
 
-type Appointment = {
+export type Appointment = {
   id: string;
-  clinicID: string | null;
   description: string | null;
   startAt: string;
   endAt: string;
   status: AppointmentStatus;
+  dentistId: string;
+  cabinetId: string;
+  patientId: string;
 };
 
 type SelectedSlot = {
@@ -30,45 +39,72 @@ type SelectedSlot = {
   hour: number;
 };
 
+type PositionedAppointment = Appointment & {
+  column: number;
+  columns: number;
+};
+
 function getMinutesFromDate(date: Date) {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-function getAppointmentStyles(status: AppointmentStatus) {
-  switch (status) {
-    case "completed":
-      return "bg-green-500 text-white";
-    case "no_show":
-      return "bg-red-500 text-white";
-    case "scheduled":
-      return "bg-blue-500 text-white";
-    default:
-      return "";
-  }
+function layoutAppointments(
+  appointments: Appointment[],
+): PositionedAppointment[] {
+  const sorted = [...appointments].sort(
+    (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+  );
+
+  const active: { appt: Appointment; column: number }[] = [];
+  const positioned: PositionedAppointment[] = [];
+
+  sorted.forEach((appt) => {
+    const start = new Date(appt.startAt).getTime();
+
+    for (let i = active.length - 1; i >= 0; i--) {
+      if (new Date(active[i].appt.endAt).getTime() <= start) {
+        active.splice(i, 1);
+      }
+    }
+
+    const used = active.map((a) => a.column);
+    let column = 0;
+    while (used.includes(column)) column++;
+
+    active.push({ appt, column });
+
+    const columns = Math.max(...active.map((a) => a.column)) + 1;
+
+    positioned.push({ ...appt, column, columns });
+  });
+
+  return positioned;
 }
 
 export default function WeeklyAgenda() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
-  const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
+
+  const [filterDentist, setFilterDentist] = useState("");
+  const [filterCabinet, setFilterCabinet] = useState("");
+
+  const clearFilters = () => {
+    setFilterDentist("");
+    setFilterCabinet("");
+  };
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
-  const days = Array.from({ length: 7 }, (_, i) => addDaysDate(weekStart, i));
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const today = new Date();
   const currentMinutes = today.getHours() * 60 + today.getMinutes();
   const currentTimeRef = useRef<HTMLDivElement>(null);
 
-  // Función para cargar citas
   async function fetchAppointments() {
-    try {
-      const res = await fetch("/api/appointments");
-      if (!res.ok) return;
-      const data = await res.json();
-      setAppointments(data);
-    } catch (error) {
-      console.error("Error fetching appointments", error);
-    }
+    const res = await fetch("/api/appointments");
+    if (!res.ok) return;
+    setAppointments(await res.json());
   }
 
   useEffect(() => {
@@ -77,40 +113,58 @@ export default function WeeklyAgenda() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (currentTimeRef.current) {
-      currentTimeRef.current.scrollIntoView({ block: "center" });
-    }
-  }, []);
-
   return (
-    <div className="w-screen max-h-140 bg-background border rounded-lg flex flex-col relative pl-5 pr-5 pb">
-      {/* Controles - sticky dentro del contenedor */}
-      <div className="sticky top-0 bg-background border-b flex justify-between items-center mb-4 z-10 px-4 py-2">
-        <button
-          onClick={() => setCurrentWeek(addWeeks(currentWeek, -1))}
-          className="border px-3 py-1 rounded hover:bg-accent"
-        >
-          ← Semana anterior
-        </button>
+    <div className="w-screen max-h-140 flex flex-col border rounded-lg relative">
+      {/* ================= HEADER ================= */}
+      <div className="sticky top-0 z-20 bg-background border-b">
+        <div className="flex items-center gap-2 px-4 py-2">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentWeek(addWeeks(currentWeek, -1))}
+          >
+            ←
+          </Button>
 
-        <div className="font-medium">
-          Semana del {format(weekStart, "dd MMM yyyy", { locale: es })}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline">
+                {format(weekStart, "dd MMM yyyy", { locale: es })}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="p-0">
+              <Calendar
+                mode="single"
+                selected={currentWeek}
+                onSelect={(d) => d && setCurrentWeek(d)}
+                locale={es}
+              />
+            </PopoverContent>
+          </Popover>
+
+          <Button
+            variant="outline"
+            onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
+          >
+            →
+          </Button>
+
+          <div className="ml-auto flex items-center gap-2">
+            <SelectDentistsOnAppointments
+              value={filterDentist}
+              onChange={setFilterDentist}
+            />
+            <SelectCabinetsOnAppointments
+              value={filterCabinet}
+              onChange={setFilterCabinet}
+            />
+            <Button variant="ghost" onClick={clearFilters}>
+              Borrar
+            </Button>
+          </div>
         </div>
 
-        <button
-          onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
-          className="border px-3 py-1 rounded hover:bg-accent"
-        >
-          Semana siguiente →
-        </button>
-      </div>
-
-      {/* Agenda */}
-      <div className="flex flex-col grow border rounded-lg overflow-hidden relative">
-        {/* Header de tabla */}
-        <div className="grid grid-cols-[80px_repeat(7,1fr)] bg-muted text-sm font-medium shrink-0 sticky top-44px z-10 border-b">
-          {/* sticky top=[altura controles] para que quede justo debajo */}
+        {/* Header días */}
+        <div className="grid grid-cols-[80px_repeat(7,1fr)] bg-muted text-sm font-medium border-t">
           <div />
           {days.map((day) => (
             <div
@@ -128,132 +182,106 @@ export default function WeeklyAgenda() {
             </div>
           ))}
         </div>
+      </div>
 
-        {/* Cuerpo scrollable */}
+      {/* ================= BODY ================= */}
+      <div className="flex-1 overflow-y-auto">
         <div
-          className="overflow-y-auto grow"
-          style={{ minHeight: 0, paddingBottom: "72px" }} // espacio para leyenda
+          className="grid grid-cols-[80px_repeat(7,1fr)]"
+          style={{ height: TOTAL_MINUTES * PX_PER_MINUTE }}
         >
-          <div
-            className="grid grid-cols-[80px_repeat(7,1fr)] pt-10"
-            style={{ height: 24 * 60 * PX_PER_MINUTE }}
-          >
-            {/* Horas */}
-            <div className="relative">
-              {HOURS.map((hour) => (
-                <div
-                  key={hour}
-                  className="border text-xs text-muted-foreground px-2"
-                  style={{ height: 60 * PX_PER_MINUTE }}
-                >
-                  {hour.toString().padStart(2, "0")}:00
-                </div>
-              ))}
-            </div>
-
-            {/* Días */}
-            {days.map((day) => {
-              const dayAppointments = appointments.filter(
-                (appt) =>
-                  appt.status !== "cancelled" &&
-                  isSameDay(new Date(appt.startAt), day),
-              );
-
-              return (
-                <div
-                  key={day.toISOString()}
-                  className="relative border-l"
-                  style={{ height: 24 * 60 * PX_PER_MINUTE }}
-                >
-                  {/* Clickable grid */}
-                  {HOURS.map((hour) => {
-                    const isSelected =
-                      selectedSlot &&
-                      isSameDay(selectedSlot.day, day) &&
-                      selectedSlot.hour === hour;
-
-                    return (
-                      <div
-                        key={hour}
-                        onClick={() => setSelectedSlot({ day, hour })}
-                        className={`border cursor-pointer ${
-                          isSelected ? "bg-primary/20" : "hover:bg-accent"
-                        }`}
-                        style={{ height: 60 * PX_PER_MINUTE }}
-                      />
-                    );
-                  })}
-
-                  {/* Current time */}
-                  {isSameDay(day, today) && (
-                    <div
-                      ref={currentTimeRef}
-                      className="absolute left-0 right-0 h-0.5 bg-red-500"
-                      style={{
-                        top: currentMinutes * PX_PER_MINUTE,
-                      }}
-                    />
-                  )}
-
-                  {/* Appointments */}
-                  {dayAppointments.map((appt) => {
-                    const start = new Date(appt.startAt);
-                    const end = new Date(appt.endAt);
-
-                    const startMinutes = getMinutesFromDate(start);
-                    const endMinutes = getMinutesFromDate(end);
-
-                    return (
-                      <div
-                        key={appt.id}
-                        className={`absolute left-1 right-1 rounded text-xs p-1 shadow ${getAppointmentStyles(
-                          appt.status,
-                        )}`}
-                        style={{
-                          top: startMinutes * PX_PER_MINUTE,
-                          height: (endMinutes - startMinutes) * PX_PER_MINUTE,
-                        }}
-                      >
-                        <div className="font-medium truncate">
-                          {appt.description ?? "Cita"}
-                        </div>
-                        <div className="opacity-80">
-                          {format(start, "HH:mm")} - {format(end, "HH:mm")}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+          {/* Horas */}
+          <div>
+            {HOURS.map((hour) => (
+              <div
+                key={hour}
+                className="border text-xs px-2"
+                style={{ height: 60 * PX_PER_MINUTE }}
+              >
+                {hour.toString().padStart(2, "0")}:00
+              </div>
+            ))}
           </div>
+
+          {days.map((day) => {
+            const dayAppointments = appointments.filter(
+              (a) =>
+                isSameDay(new Date(a.startAt), day) &&
+                (!filterDentist || a.dentistId === filterDentist) &&
+                (!filterCabinet || a.cabinetId === filterCabinet) &&
+                a.status !== "cancelled",
+            );
+
+            const positioned = layoutAppointments(dayAppointments);
+
+            return (
+              <div key={day.toISOString()} className="relative border-l">
+                {HOURS.map((hour) => {
+                  const isSelected =
+                    selectedSlot &&
+                    isSameDay(selectedSlot.day, day) &&
+                    selectedSlot.hour === hour;
+
+                  return (
+                    <div
+                      key={hour}
+                      onClick={() => setSelectedSlot({ day, hour })}
+                      className={`border cursor-pointer ${
+                        isSelected ? "bg-muted" : "hover:bg-accent"
+                      }`}
+                      style={{ height: 60 * PX_PER_MINUTE }}
+                    />
+                  );
+                })}
+
+                {isSameDay(day, today) && (
+                  <div
+                    ref={currentTimeRef}
+                    className="absolute left-0 right-0 h-0.5 bg-red-500"
+                    style={{ top: currentMinutes * PX_PER_MINUTE }}
+                  />
+                )}
+
+                {positioned.map((appt) => {
+                  const start = new Date(appt.startAt);
+                  const end = new Date(appt.endAt);
+
+                  const top = (getMinutesFromDate(start) - 7 * 60) *PX_PER_MINUTE;
+                  const height =
+                    (getMinutesFromDate(end) - getMinutesFromDate(start)) *
+                    PX_PER_MINUTE;
+
+                  const width = 100 / appt.columns;
+
+                  return (
+                    <AppointmentItem
+                      key={appt.id}
+                      appointment={appt}
+                      style={{
+                        position: "absolute",
+                        top,
+                        height,
+                        width: `${width}%`,
+                        left: `${appt.column * width}%`,
+                      }}
+                      onUpdated={fetchAppointments}
+                      onDeleted={fetchAppointments}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Pasamos callback para que CreateAppointmentButton avise cuando cree cita */}
       <CreateAppointmentButton
         selectedSlot={selectedSlot}
         onCreated={() => {
           fetchAppointments();
-          setSelectedSlot(null); // limpiar selección al crear cita
+          setSelectedSlot(null);
         }}
       />
-      
-      {/* Leyenda sticky abajo dentro del contenedor */}
-      <div className="sticky bottom-0 bg-background border-t py-2 flex justify-center gap-6 text-sm z-10 max-h-10 overflow-hidden">
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded bg-blue-500 inline-block" />
-          <span className="leading-none">Programada</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded bg-green-500 inline-block" />
-          <span className="leading-none">Completada</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded bg-red-500 inline-block" />
-          <span className="leading-none">No presentado</span>
-        </div>
-      </div>
     </div>
   );
 }

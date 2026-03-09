@@ -4,13 +4,17 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@radix-ui/react-label";
-import { IconUserPlus } from "@tabler/icons-react";
+import { Label } from "@/components/ui/label";
+import { IconDoor, IconPlus } from "@tabler/icons-react";
 import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type Cabinet = {
   id: string;
@@ -23,7 +27,7 @@ type Props = {
   onCreated: (cabinet: Cabinet) => void;
 };
 
-export default function CreateCabinetPopover({ onCreated }: Props) {
+export default function CreateCabinetPopOver({ onCreated }: Props) {
   const { id: clinicId } = useParams<{ id: string }>();
 
   const [open, setOpen] = useState(false);
@@ -66,61 +70,85 @@ export default function CreateCabinetPopover({ onCreated }: Props) {
     }
   };
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2"
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen(true);
-          }}
-        >
-          <IconUserPlus className="w-4 h-4" />
-          Crear nuevo gabinete
-        </Button>
-      </PopoverTrigger>
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!loading) {
+      setOpen(newOpen);
+      if (!newOpen) {
+        // Reset cuando se cierra sin crear
+        setDescription("");
+        setError("");
+      }
+    }
+  };
 
-      <PopoverContent
-        side="right"
-        align="start"
-        className="w-64 p-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="grid gap-2">
-          <Label>Descripción</Label>
-          <Input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={loading}
-            placeholder="Opcional"
-          />
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button className="gap-2">
+          <IconPlus className="w-4 h-4" />
+          Nuevo gabinete
+        </Button>
+      </DialogTrigger>
+      
+      <DialogContent className="sm:max-w-106.25">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <IconDoor className="w-5 h-5" />
+            Crear nuevo gabinete
+          </DialogTitle>
+          <DialogDescription>
+            Completa la información para crear un nuevo gabinete en tu clínica.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="description">Descripción</Label>
+            <Input
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={loading}
+              autoFocus
+            />
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              La descripción es opcional. El número se asignará automáticamente.
+            </p>
+          </div>
 
           {error && (
-            <p className="text-xs text-red-600">{error}</p>
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3">
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            </div>
           )}
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setOpen(false)}
-              disabled={loading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleCreate}
-              disabled={loading}
-            >
-              {loading ? "Creando..." : "Crear"}
-            </Button>
-          </div>
         </div>
-      </PopoverContent>
-    </Popover>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={loading}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            type="submit" 
+            onClick={handleCreate}
+            disabled={loading}
+            className="gap-2"
+          >
+            {loading ? (
+              <>Creando...</>
+            ) : (
+              <>
+                <IconPlus className="w-4 h-4" />
+                Crear gabinete
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -56,7 +56,8 @@ model Appointments {
   endAt       DateTime?           @db.Timestamptz(6)
   Clinic      Clinic?             @relation(fields: [clinicID], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "constraint_1")
   Patient     Patient?            @relation(fields: [patientId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "constraint_2")
-  Cabinets    Cabinets?           @relation(fields: [cabinetId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_3")
+  Cabinets    Cabinets?           @relation(fields: [cabinetId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "constraint_3")
+  Dentist     Dentist?            @relation(fields: [dentistId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "constraint_4")
 }
 
 model Cabinets {
@@ -86,6 +87,7 @@ model Dentist {
   phone          String?
   specialty      String?
   userId         String?
+  Appointments   Appointments[]
   ClinicDentists ClinicDentists[]
   User           User?            @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_1")
 }

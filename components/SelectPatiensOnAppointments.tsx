@@ -72,7 +72,7 @@ export default function SelectPatientsOnAppointments({
         onValueChange={onChange}
         disabled={disabled || loading}
       >
-        <SelectTrigger className="w-full">
+        <SelectTrigger className="w-full  min-w-55">
           <SelectValue
             placeholder={loading ? "Cargando pacientes..." : "Selecciona un paciente"}
           />
