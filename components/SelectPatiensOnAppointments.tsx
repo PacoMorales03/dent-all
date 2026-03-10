@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useParams } from "next/navigation";
 import { Label } from "@radix-ui/react-label";
 import {
   Select,
@@ -25,14 +25,9 @@ type Props = {
   error?: string;
 };
 
-export default function SelectPatientsOnAppointments({
-  value,
-  onChange,
-  disabled,
-  error,
-}: Props) {
-  const pathname = usePathname();
-  const clinicId = pathname.split("/")[3];
+export default function SelectPatientsOnAppointments({ value, onChange, disabled, error }: Props) {
+  // FIX: useParams en lugar de pathname.split("/")[3]
+  const { id: clinicId } = useParams<{ id: string }>();
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,42 +35,34 @@ export default function SelectPatientsOnAppointments({
 
   useEffect(() => {
     if (!clinicId) return;
+    let cancelled = false;
 
     async function fetchPatients() {
       setLoading(true);
       setLoadError(null);
-
       try {
         const res = await fetch(`/api/clinic-patients?clinicId=${clinicId}`);
-        if (!res.ok) {
-          throw new Error("Error cargando pacientes");
-        }
-
+        if (!res.ok) throw new Error("Error cargando pacientes");
         const data = await res.json();
-        setPatients(data);
-      } catch (e) {
-        setLoadError("No se pudieron cargar los pacientes");
+        if (!cancelled) setPatients(data);
+      } catch {
+        if (!cancelled) setLoadError("No se pudieron cargar los pacientes");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     fetchPatients();
+    return () => { cancelled = true; };
   }, [clinicId]);
 
   return (
     <div className="grid gap-1 relative">
       <Label>Paciente *</Label>
 
-      <Select
-        value={value}
-        onValueChange={onChange}
-        disabled={disabled || loading}
-      >
-        <SelectTrigger className="w-full  min-w-55">
-          <SelectValue
-            placeholder={loading ? "Cargando pacientes..." : "Selecciona un paciente"}
-          />
+      <Select value={value} onValueChange={onChange} disabled={disabled || loading}>
+        <SelectTrigger className="w-full min-w-55">
+          <SelectValue placeholder={loading ? "Cargando pacientes..." : "Selecciona un paciente"} />
         </SelectTrigger>
 
         <SelectContent position="popper" className="z-50">
@@ -88,11 +75,7 @@ export default function SelectPatientsOnAppointments({
           <div className="border-t mt-1 pt-1 px-2">
             <CreatePatientPopover
               onCreated={(newPatient) => {
-                const patient = {
-                  ...newPatient,
-                  surname: newPatient.surname || "",
-                };
-                setPatients((prev) => [...prev, patient]);
+                setPatients((prev) => [...prev, { ...newPatient, surname: newPatient.surname ?? "" }]);
                 onChange(newPatient.id);
               }}
             />
@@ -101,9 +84,7 @@ export default function SelectPatientsOnAppointments({
       </Select>
 
       {(error || loadError) && (
-        <p className="text-sm text-red-600">
-          {error || loadError}
-        </p>
+        <p className="text-sm text-red-600">{error || loadError}</p>
       )}
     </div>
   );

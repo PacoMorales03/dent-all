@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { format, startOfWeek, addWeeks, isSameDay, addDays } from "date-fns";
 import { es } from "date-fns/locale";
+import { useParams } from "next/navigation"; // ✅ FIX: obtener clinicId de la URL
 
 import CreateAppointmentButton from "./CreateAppointmentButton";
 import AppointmentItem from "./AppointmentItem";
@@ -48,9 +49,7 @@ function getMinutesFromDate(date: Date) {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-function layoutAppointments(
-  appointments: Appointment[],
-): PositionedAppointment[] {
+function layoutAppointments(appointments: Appointment[]): PositionedAppointment[] {
   const sorted = [...appointments].sort(
     (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
   );
@@ -74,7 +73,6 @@ function layoutAppointments(
     active.push({ appt, column });
 
     const columns = Math.max(...active.map((a) => a.column)) + 1;
-
     positioned.push({ ...appt, column, columns });
   });
 
@@ -82,10 +80,12 @@ function layoutAppointments(
 }
 
 export default function WeeklyAgenda() {
+  // ✅ FIX: obtener el clinicId del segmento dinámico de la URL /platform/clinic/[id]/...
+  const { id: clinicId } = useParams<{ id: string }>();
+
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
-
   const [filterDentist, setFilterDentist] = useState("");
   const [filterCabinet, setFilterCabinet] = useState("");
 
@@ -101,54 +101,84 @@ export default function WeeklyAgenda() {
   const currentMinutes = today.getHours() * 60 + today.getMinutes();
   const currentTimeRef = useRef<HTMLDivElement>(null);
 
-  async function fetchAppointments() {
-    const res = await fetch("/api/appointments");
-    if (!res.ok) return;
+  // useCallback estable para pasarlo como prop a hijos (onCreated, onUpdated...)
+  const fetchAppointments = useCallback(async () => {
+    if (!clinicId) return;
+    const res = await fetch(`/api/appointments?clinicID=${clinicId}`);
+    if (!res.ok) {
+      console.error("Error cargando citas:", res.status, await res.text());
+      return;
+    }
     setAppointments(await res.json());
-  }
+  }, [clinicId]);
 
+  // La función async va DENTRO del efecto para evitar el warning
+  // react-hooks/set-state-in-effect. El flag "cancelled" previene
+  // actualizaciones de estado si el componente se desmonta antes
+  // de que el fetch termine (evita memory leaks).
   useEffect(() => {
-    (async () => {
-      await fetchAppointments();
-    })();
-  }, []);
+    let cancelled = false;
+    async function load() {
+      if (!clinicId) return;
+      const res = await fetch(`/api/appointments?clinicID=${clinicId}`);
+      if (!res.ok || cancelled) return;
+      setAppointments(await res.json());
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [clinicId, currentWeek]);
 
   return (
     <div className="w-screen max-h-140 flex flex-col border rounded-lg relative">
       {/* ================= HEADER ================= */}
       <div className="sticky top-0 z-20 bg-background border-b">
-        <div className="flex items-center gap-2 px-4 py-2">
-          <Button
-            variant="outline"
-            onClick={() => setCurrentWeek(addWeeks(currentWeek, -1))}
-          >
-            ←
-          </Button>
+        <div className="flex items-center justify-between px-4 py-2 gap-4 flex-wrap">
+          {/* Navegación semanas */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentWeek((w) => addWeeks(w, -1))}
+            >
+              ←
+            </Button>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline">
-                {format(weekStart, "dd MMM yyyy", { locale: es })}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="p-0">
-              <Calendar
-                mode="single"
-                selected={currentWeek}
-                onSelect={(d) => d && setCurrentWeek(d)}
-                locale={es}
-              />
-            </PopoverContent>
-          </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  {format(weekStart, "dd MMM", { locale: es })} -{" "}
+                  {format(addDays(weekStart, 6), "dd MMM yyyy", { locale: es })}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={currentWeek}
+                  onSelect={(date) => date && setCurrentWeek(date)}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
 
-          <Button
-            variant="outline"
-            onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}
-          >
-            →
-          </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentWeek((w) => addWeeks(w, 1))}
+            >
+              →
+            </Button>
 
-          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setCurrentWeek(new Date())}
+            >
+              Hoy
+            </Button>
+          </div>
+
+          {/* Filtros */}
+          <div className="flex items-center gap-2 flex-wrap">
             <SelectDentistsOnAppointments
               value={filterDentist}
               onChange={setFilterDentist}
@@ -157,19 +187,21 @@ export default function WeeklyAgenda() {
               value={filterCabinet}
               onChange={setFilterCabinet}
             />
-            <Button variant="ghost" onClick={clearFilters}>
-              Borrar
-            </Button>
+            {(filterDentist || filterCabinet) && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Limpiar filtros
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Header días */}
-        <div className="grid grid-cols-[80px_repeat(7,1fr)] bg-muted text-sm font-medium border-t">
+        {/* Cabecera días */}
+        <div className="grid grid-cols-[80px_repeat(7,1fr)] border-t">
           <div />
           {days.map((day) => (
             <div
               key={day.toISOString()}
-              className={`p-2 text-center border-l ${
+              className={`text-center text-sm py-2 font-medium border-l ${
                 isSameDay(day, today)
                   ? "bg-primary text-primary-foreground"
                   : ""
@@ -246,7 +278,8 @@ export default function WeeklyAgenda() {
                   const start = new Date(appt.startAt);
                   const end = new Date(appt.endAt);
 
-                  const top = (getMinutesFromDate(start) - 7 * 60) *PX_PER_MINUTE;
+                  const top =
+                    (getMinutesFromDate(start) - 7 * 60) * PX_PER_MINUTE;
                   const height =
                     (getMinutesFromDate(end) - getMinutesFromDate(start)) *
                     PX_PER_MINUTE;

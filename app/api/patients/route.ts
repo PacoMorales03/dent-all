@@ -2,53 +2,57 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 
-
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
-  const patients = await prisma.patient.findMany({
-    where: {
-      userId,
-    },
-    select: {
-      id: true,
-      name: true,
-      surname: true,
-      phone: true,
-    },
-  });
-
-  return NextResponse.json(patients);
+  return NextResponse.json(
+    { error: "Para listar pacientes de una clinica usa GET /api/clinic-patients?clinicId=..." },
+    { status: 405 }
+  );
 }
 
 export async function POST(req: Request) {
   const { userId } = await auth();
-  if (!userId) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const body = await req.json();
-  const { name, surname, phone } = body;
+  const { name, surname, phone, clinicId } = body;
 
-  if (!name) {
-    return new NextResponse("Name is required", { status: 400 });
+  if (!name?.trim()) {
+    return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
   }
 
-  const patient = await prisma.patient.create({
-    data: {
-      name,
-      surname,
-      phone,
-    },
-    select: {
-      id: true,
-      name: true,
-      surname: true,
-      phone: true,
-    },
+  if (!clinicId) {
+    return NextResponse.json({ error: "clinicId es obligatorio" }, { status: 400 });
+  }
+
+  const membership = await prisma.clinicUser.findUnique({
+    where: { clinicId_userId: { clinicId, userId } },
+    select: { role: true },
+  });
+
+  if (!membership) {
+    return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
+  }
+
+  const patient = await prisma.$transaction(async (tx) => {
+    const p = await tx.patient.create({
+      data: {
+        name: name.trim(),
+        surname: surname?.trim() || null,
+        phone: phone?.trim() || null,
+      },
+      select: { id: true, name: true, surname: true, phone: true },
+    });
+    const existing = await tx.clinicPatients.findUnique({
+      where: { clinicId_PatientId: { clinicId, PatientId: p.id } },
+    });
+
+    if (!existing) {
+      await tx.clinicPatients.create({
+        data: { clinicId, PatientId: p.id },
+      });
+    }
+
+    return p;
   });
 
   return NextResponse.json(patient, { status: 201 });

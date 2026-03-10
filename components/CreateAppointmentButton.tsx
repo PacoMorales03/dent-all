@@ -27,7 +27,7 @@ import SelectPatientsOnAppointments from "./SelectPatiensOnAppointments";
 
 type Props = {
   selectedSlot: { day: Date; hour: number } | null;
-  onCreated: () => void; // callback para avisar a la agenda
+  onCreated: () => void;
 };
 
 export default function CreateAppointmentButton({
@@ -36,16 +36,14 @@ export default function CreateAppointmentButton({
 }: Props) {
   const [open, setOpen] = useState(false);
 
-  // Formulario cita
   const [patient, setPatient] = useState<string>("");
   const [dentist, setDentist] = useState<string>("");
   const [cabinetId, setCabinetId] = useState("");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState(""); // yyyy-mm-dd
-  const [time, setTime] = useState(""); // HH:mm
-  const [duration, setDuration] = useState("60"); // minutos
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [duration, setDuration] = useState("60");
 
-  // Errores
   const [errors, setErrors] = useState<{
     patient?: string;
     dentist?: string;
@@ -62,12 +60,11 @@ export default function CreateAppointmentButton({
 
   const [loading, setLoading] = useState(false);
 
-  // Actualiza fecha y hora cuando cambia selectedSlot
   useEffect(() => {
     if (selectedSlot) {
       const d = selectedSlot.day;
       const localDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-      const formattedDate = localDate.toLocaleDateString("en-CA"); // yyyy-mm-dd
+      const formattedDate = localDate.toLocaleDateString("en-CA");
       setDate(formattedDate);
       setTime(selectedSlot.hour.toString().padStart(2, "0") + ":00");
     }
@@ -78,8 +75,7 @@ export default function CreateAppointmentButton({
     if (!patient) newErrors.patient = "Paciente es obligatorio";
     if (!dentist) newErrors.dentist = "Dentista es obligatorio";
     if (!cabinetId) newErrors.cabinet = "Gabinete es obligatorio";
-    if (!description.trim())
-      newErrors.description = "Descripción es obligatoria";
+    if (!description.trim()) newErrors.description = "Descripción es obligatoria";
     if (!date) newErrors.date = "Fecha es obligatoria";
     if (!time) newErrors.time = "Hora es obligatoria";
     if (!duration) newErrors.duration = "Duración es obligatoria";
@@ -107,7 +103,6 @@ export default function CreateAppointmentButton({
       endAtDate.setMinutes(endAtDate.getMinutes() + Number(duration));
       const endAt = endAtDate.toISOString();
 
-      // Traemos citas existentes del día para la clínica
       const existingRes = await fetch(
         `/api/appointments?clinicID=${clinicId}&date=${date}`,
       );
@@ -116,6 +111,7 @@ export default function CreateAppointmentButton({
         setLoading(false);
         return;
       }
+
       const existingAppointments: {
         id: string;
         dentistId: string;
@@ -125,41 +121,41 @@ export default function CreateAppointmentButton({
         endAt: string;
       }[] = await existingRes.json();
 
-      const overlaps = (start1: Date, end1: Date, start2: Date, end2: Date) =>
-        start1 < end2 && start2 < end1;
+      const overlaps = (s1: Date, e1: Date, s2: Date, e2: Date) =>
+        s1 < e2 && s2 < e1;
 
-      // Comprobar superposición para dentista, gabinete y paciente
+      // ✅ FIX: acumular conflictos recorriendo TODAS las citas solapadas.
+      // Antes se hacía return dentro del bucle aunque newErrors estuviera vacío,
+      // bloqueando la creación aunque dentista, gabinete y paciente fueran distintos.
+      const conflictErrors: typeof errors = {};
+
       for (const appt of existingAppointments) {
         if (
-          overlaps(
-            startDate,
-            endAtDate,
-            new Date(appt.startAt),
-            new Date(appt.endAt),
-          )
+          overlaps(startDate, endAtDate, new Date(appt.startAt), new Date(appt.endAt))
         ) {
-          const newErrors: typeof errors = {};
-
           if (appt.dentistId === dentist) {
-            newErrors.duplicateDentist =
+            conflictErrors.duplicateDentist =
               "Ya existe una cita que se superpone para este dentista.";
           }
           if (appt.cabinetId === cabinetId) {
-            newErrors.duplicateCabinet =
+            conflictErrors.duplicateCabinet =
               "Ya existe una cita que se superpone para este gabinete.";
           }
           if (appt.patientId === patient) {
-            newErrors.duplicatePatient =
+            conflictErrors.duplicatePatient =
               "Ya existe una cita que se superpone para este paciente.";
           }
-
-          setErrors(newErrors);
-          setLoading(false);
-          return;
         }
       }
 
-      // Crear cita porque no hay conflicto
+      // Solo bloquear si hay al menos un conflicto real
+      if (Object.keys(conflictErrors).length > 0) {
+        setErrors(conflictErrors);
+        setLoading(false);
+        return;
+      }
+
+      // Sin conflictos → crear la cita
       const res = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -182,10 +178,8 @@ export default function CreateAppointmentButton({
         return;
       }
 
-      // Reset y cerrar modal
       setOpen(false);
       resetForm();
-
       onCreated();
     } catch {
       setErrors({ general: "Error de red o servidor" });
@@ -194,7 +188,6 @@ export default function CreateAppointmentButton({
     }
   };
 
-  // Función para resetear el formulario
   const resetForm = () => {
     setPatient("");
     setDentist("");
@@ -221,9 +214,7 @@ export default function CreateAppointmentButton({
       open={open}
       onOpenChange={(isOpen) => {
         setOpen(isOpen);
-        if (!isOpen) {
-          resetForm();
-        }
+        if (!isOpen) resetForm();
       }}
     >
       <SheetTrigger asChild>
@@ -266,7 +257,6 @@ export default function CreateAppointmentButton({
                   disabled={loading}
                 />
 
-                {/* Descripción */}
                 <div className="grid gap-1">
                   <Label htmlFor="description">Descripción *</Label>
                   <Input
@@ -282,7 +272,6 @@ export default function CreateAppointmentButton({
                   )}
                 </div>
 
-                {/* Fecha */}
                 <div className="grid gap-1">
                   <Label htmlFor="date">Fecha *</Label>
                   <Input
@@ -298,7 +287,6 @@ export default function CreateAppointmentButton({
                   )}
                 </div>
 
-                {/* Hora */}
                 <div className="grid gap-1">
                   <Label htmlFor="time">Hora *</Label>
                   <Input
@@ -314,7 +302,6 @@ export default function CreateAppointmentButton({
                   )}
                 </div>
 
-                {/* Duración */}
                 <div className="grid gap-1">
                   <Label htmlFor="duration">Duración (minutos) *</Label>
                   <Input

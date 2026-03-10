@@ -2,96 +2,88 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@clerk/nextjs/server";
 
-// GET - Obtener un gabinete específico
+async function verifyMembership(userId: string, clinicId: string) {
+  return prisma.clinicUser.findUnique({
+    where: { clinicId_userId: { clinicId, userId } },
+    select: { role: true },
+  });
+}
+
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { userId } = await auth();
-  if (!userId) return new NextResponse("Unauthorized", { status: 401 });
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  try {
-    const { id } = await params;
+  const { id } = await params;
 
-    const cabinet = await prisma.cabinets.findUnique({
-      where: { id },
-    });
+  const cabinet = await prisma.cabinets.findUnique({ where: { id } });
+  if (!cabinet) return NextResponse.json({ error: "Gabinete no encontrado" }, { status: 404 });
 
-    if (!cabinet) {
-      return new NextResponse("Cabinet not found", { status: 404 });
-    }
+  const membership = await verifyMembership(userId, cabinet.clinicId);
+  if (!membership) return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
 
-    return NextResponse.json(cabinet);
-  } catch (error) {
-    console.error("Error fetching cabinet:", error);
-    return new NextResponse("Error fetching cabinet", { status: 500 });
-  }
+  return NextResponse.json(cabinet);
 }
 
-// PATCH - Actualizar un gabinete específico
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { userId } = await auth();
-  if (!userId) return new NextResponse("Unauthorized", { status: 401 });
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  try {
-    const { id } = await params; 
-    const { description } = await req.json();
+  const { id } = await params;
 
-    // Verificar que el gabinete existe
-    const existingCabinet = await prisma.cabinets.findUnique({
-      where: { id },
-    });
 
-    if (!existingCabinet) {
-      return new NextResponse("Cabinet not found", { status: 404 });
-    }
+  const cabinet = await prisma.cabinets.findUnique({ where: { id } });
+  if (!cabinet) return NextResponse.json({ error: "Gabinete no encontrado" }, { status: 404 });
 
-    // Actualizar el gabinete
-    const updatedCabinet = await prisma.cabinets.update({
-      where: { id },
-      data: { 
-        description: description === null ? null : description 
-      },
-    });
+  const membership = await verifyMembership(userId, cabinet.clinicId);
+  if (!membership) return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
 
-    return NextResponse.json(updatedCabinet);
-  } catch (error) {
-    console.error("Error updating cabinet:", error);
-    return new NextResponse("Error updating cabinet", { status: 500 });
-  }
+
+  const { description } = await req.json();
+
+  const updated = await prisma.cabinets.update({
+    where: { id },
+    data: { description: description === null ? null : description },
+  });
+
+  return NextResponse.json(updated);
 }
 
-// DELETE - Eliminar un gabinete específico
 export async function DELETE(
-  req: Request,
+  _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { userId } = await auth();
-  if (!userId) return new NextResponse("Unauthorized", { status: 401 });
+  if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
-  try {
-    const { id } = await params; 
+  const { id } = await params;
 
-    // Verificar que el gabinete existe
-    const existingCabinet = await prisma.cabinets.findUnique({
-      where: { id },
-    });
+  const cabinet = await prisma.cabinets.findUnique({ where: { id } });
+  if (!cabinet) return NextResponse.json({ error: "Gabinete no encontrado" }, { status: 404 });
 
-    if (!existingCabinet) {
-      return new NextResponse("Cabinet not found", { status: 404 });
-    }
+  const membership = await verifyMembership(userId, cabinet.clinicId);
+  if (!membership) return NextResponse.json({ error: "Acceso denegado" }, { status: 403 });
 
-    // Eliminar el gabinete
-    await prisma.cabinets.delete({
-      where: { id },
-    });
+  const activeCitas = await prisma.appointments.count({
+    where: {
+      cabinetId: id,
+      status: { in: ["scheduled"] },
+    },
+  });
 
-    return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    console.error("Error deleting cabinet:", error);
-    return new NextResponse("Error deleting cabinet", { status: 500 });
+  if (activeCitas > 0) {
+    return NextResponse.json(
+      { error: `No se puede eliminar: el gabinete tiene ${activeCitas} cita(s) programada(s)` },
+      { status: 409 }
+    );
   }
+
+  await prisma.cabinets.delete({ where: { id } });
+
+  return NextResponse.json({ deleted: true });
 }

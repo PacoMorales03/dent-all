@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -28,9 +28,19 @@ type Props = {
 };
 
 export function EditCabinetDialog({ cabinet, open, onOpenChange, onSuccess }: Props) {
-  const [description, setDescription] = useState(cabinet.description || "");
+  const [description, setDescription] = useState(cabinet.description ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // ✅ FIX: si el usuario edita un gabinete, cierra y abre otro, el campo
+  // mostraba la descripción del gabinete anterior (estado obsoleto).
+  // Sincronizar cuando cambie cabinet o se abra el diálogo.
+  useEffect(() => {
+    if (open) {
+      setDescription(cabinet.description ?? "");
+      setError("");
+    }
+  }, [open, cabinet]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,13 +51,12 @@ export function EditCabinetDialog({ cabinet, open, onOpenChange, onSuccess }: Pr
       const res = await fetch(`/api/cabinets/${cabinet.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: description.trim() || null,
-        }),
+        body: JSON.stringify({ description: description.trim() || null }),
       });
 
       if (!res.ok) {
-        throw new Error(await res.text());
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "Error al actualizar el gabinete");
       }
 
       const updatedCabinet: Cabinet = await res.json();
@@ -62,13 +71,11 @@ export function EditCabinetDialog({ cabinet, open, onOpenChange, onSuccess }: Pr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-106.25">
+      <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Editar Gabinete #{cabinet.num}</DialogTitle>
-            <DialogDescription>
-              Modifica la descripción del gabinete
-            </DialogDescription>
+            <DialogDescription>Modifica la descripción del gabinete.</DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
@@ -80,21 +87,19 @@ export function EditCabinetDialog({ cabinet, open, onOpenChange, onSuccess }: Pr
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descripción del gabinete (opcional)"
                 disabled={loading}
+                autoFocus
               />
             </div>
 
             {error && (
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3">
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              </div>
             )}
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>

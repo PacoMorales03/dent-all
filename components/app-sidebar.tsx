@@ -1,6 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
+import Link from "next/link"
 import { Calendar, Home, Inbox, Search, Settings } from "lucide-react"
 import {
   Sidebar,
@@ -12,51 +13,21 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
-const items = [
-  {
-    title: "Dashboard",
-    urlTemplate: "/platform/clinic/[id]/dashboard",
-    icon: Home,
-  },
-  {
-    title: "Appointments",
-    urlTemplate: "/platform/clinic/[id]/appointments",
-    icon: Inbox,
-  },
-  {
-    title: "Cabinets",
-    urlTemplate: "/platform/clinic/[id]/cabinets",
-    icon: Calendar,
-  },
-  {
-    title: "Search",
-    urlTemplate: "#",
-    icon: Search,
-  },
-  {
-    title: "Settings",
-    urlTemplate: "#",
-    icon: Settings,
-  },
+type Props = {
+  clinicId: string
+  role: "owner" | "admin" | "reception" | "dentist"
+}
+
+const NAV_ITEMS = [
+  { title: "Dashboard",    path: "dashboard",    icon: Home     },
+  { title: "Citas",        path: "appointments", icon: Inbox    },
+  { title: "Gabinetes",    path: "cabinets",     icon: Calendar },
+  { title: "Buscar",       path: null,           icon: Search   },
+  { title: "Ajustes",      path: null,           icon: Settings },
 ]
 
-export function AppSidebar() {
+export function AppSidebar({ clinicId, role }: Props) {
   const pathname = usePathname()
-
-  // Extraemos clinicId de la URL actual
-  // Asumimos que la ruta es algo como /platform/clinic/{clinicId}/dashboard
-  const parts = pathname.split("/")
-  const clinicId = parts[3] || ""
-
-  // Función para reemplazar [id] por el clinicId real
-  const buildUrl = (urlTemplate: string) =>
-    urlTemplate.includes("[id]") ? urlTemplate.replace("[id]", clinicId) : urlTemplate
-
-  // Detectar si el item está activo comparando la URL construida con la ruta actual
-  const isActive = (urlTemplate: string) => {
-    const url = buildUrl(urlTemplate)
-    return pathname === url
-  }
 
   return (
     <Sidebar className="pt-15">
@@ -64,17 +35,26 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => {
-                const url = buildUrl(item.urlTemplate)
-                const active = isActive(item.urlTemplate)
+              {NAV_ITEMS.map((item) => {
+                const url = item.path
+                  ? `/platform/clinic/${clinicId}/${item.path}`
+                  : "#"
+
+                const active = item.path ? pathname === url : false
 
                 return (
-                  <SidebarMenuItem key={item.title} className={active ? "bg-gray-200" : ""}>
+                  <SidebarMenuItem
+                    key={item.title}
+                    className={active ? "bg-gray-200" : ""}
+                  >
                     <SidebarMenuButton asChild>
-                      <a href={url} className={active ? "font-bold text-blue-600" : ""}>
+                      <Link
+                        href={url}
+                        className={active ? "font-bold text-blue-600" : ""}
+                      >
                         <item.icon />
                         <span>{item.title}</span>
-                      </a>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 )

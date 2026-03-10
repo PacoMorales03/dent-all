@@ -47,38 +47,26 @@ export default function CreateDentistPopover({ onCreated }: Props) {
     setError("");
 
     try {
-      const dentistRes = await fetch("/api/dentists", {
+
+      const res = await fetch("/api/dentists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
-          surname: surname.trim(),
-          specialty: specialty.trim(),
-        }),
-      });
-
-      if (!dentistRes.ok) {
-        throw new Error(await dentistRes.text());
-      }
-
-      const dentist: Dentist = await dentistRes.json();
-
-      const relationRes = await fetch("/api/clinicDentist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+          surname: surname.trim() || undefined,
+          specialty: specialty.trim() || undefined,
           clinicId,
-          dentistId: dentist.id,
         }),
       });
 
-      if (!relationRes.ok) {
-        throw new Error("Error vinculando dentista a clínica");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "Error creando dentista");
       }
 
+      const dentist: Dentist = await res.json();
       onCreated(dentist);
 
-      // Reset
       setName("");
       setSurname("");
       setSpecialty("");
@@ -94,7 +82,6 @@ export default function CreateDentistPopover({ onCreated }: Props) {
     if (!loading) {
       setOpen(newOpen);
       if (!newOpen) {
-        // Reset cuando se cierra sin crear
         setName("");
         setSurname("");
         setSpecialty("");
@@ -106,30 +93,26 @@ export default function CreateDentistPopover({ onCreated }: Props) {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2"
-        >
+        <Button variant="ghost" size="sm" className="w-full justify-start gap-2">
           <IconUserPlus className="w-4 h-4" />
           Crear nuevo dentista
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-106.25">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <IconUser className="w-5 h-5" />
             Nuevo dentista
           </DialogTitle>
           <DialogDescription>
-            Añade un nuevo dentista a tu clínica. Los campos marcados con * son obligatorios.
+            Añade un nuevo dentista a tu clínica. El nombre es obligatorio.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="name" className="flex items-center gap-1">
+            <Label htmlFor="name">
               Nombre <span className="text-red-500">*</span>
             </Label>
             <Input
@@ -172,28 +155,11 @@ export default function CreateDentistPopover({ onCreated }: Props) {
         </div>
 
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setOpen(false)}
-            disabled={loading}
-          >
+          <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
             Cancelar
           </Button>
-          <Button
-            type="submit"
-            onClick={handleCreate}
-            disabled={loading}
-            className="gap-2"
-          >
-            {loading ? (
-              "Creando..."
-            ) : (
-              <>
-                <IconUserPlus className="w-4 h-4" />
-                Crear dentista
-              </>
-            )}
+          <Button type="submit" onClick={handleCreate} disabled={loading} className="gap-2">
+            {loading ? "Creando..." : <><IconUserPlus className="w-4 h-4" /> Crear dentista</>}
           </Button>
         </DialogFooter>
       </DialogContent>

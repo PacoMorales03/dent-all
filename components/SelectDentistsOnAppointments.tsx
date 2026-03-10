@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useParams } from "next/navigation";
 import { Label } from "@radix-ui/react-label";
 import {
   Select,
@@ -25,14 +25,9 @@ type Props = {
   error?: string;
 };
 
-export default function SelectDentistsOnAppointments({
-  value,
-  onChange,
-  disabled,
-  error,
-}: Props) {
-  const pathname = usePathname();
-  const clinicId = pathname.split("/")[3]; // /platform/clinic/[id]/...
+export default function SelectDentistsOnAppointments({ value, onChange, disabled, error }: Props) {
+  // FIX: useParams en lugar de pathname.split("/")[3]
+  const { id: clinicId } = useParams<{ id: string }>();
 
   const [dentists, setDentists] = useState<Dentist[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,49 +35,34 @@ export default function SelectDentistsOnAppointments({
 
   useEffect(() => {
     if (!clinicId) return;
+    let cancelled = false;
 
     async function fetchDentists() {
       setLoading(true);
       setLoadError(null);
-
       try {
-        const res = await fetch(
-          `/api/clinicDentist?clinicId=${clinicId}`
-        );
-
-        if (!res.ok) {
-          throw new Error("Error cargando dentistas");
-        }
-
+        const res = await fetch(`/api/clinicDentist?clinicId=${clinicId}`);
+        if (!res.ok) throw new Error("Error cargando dentistas");
         const data = await res.json();
-        setDentists(data);
+        if (!cancelled) setDentists(data);
       } catch {
-        setLoadError("No se pudieron cargar los dentistas");
+        if (!cancelled) setLoadError("No se pudieron cargar los dentistas");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     fetchDentists();
+    return () => { cancelled = true; };
   }, [clinicId]);
 
   return (
     <div className="grid gap-1 relative">
       <Label>Dentista *</Label>
 
-      <Select
-        value={value}
-        onValueChange={onChange}
-        disabled={disabled || loading}
-      >
-        <SelectTrigger className="w-full  min-w-55">
-          <SelectValue
-            placeholder={
-              loading
-                ? "Cargando dentistas..."
-                : "Selecciona un dentista"
-            }
-          />
+      <Select value={value} onValueChange={onChange} disabled={disabled || loading}>
+        <SelectTrigger className="w-full min-w-55">
+          <SelectValue placeholder={loading ? "Cargando dentistas..." : "Selecciona un dentista"} />
         </SelectTrigger>
 
         <SelectContent position="popper" className="z-50">
@@ -94,23 +74,8 @@ export default function SelectDentistsOnAppointments({
 
           <div className="border-t mt-1 pt-1 px-2">
             <CreateDentistPopover
-              onCreated={async (newDentist) => {
-                // Crear relación clínica-dentista
-                await fetch("/api/clinicDentist", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    clinicId,
-                    dentistId: newDentist.id,
-                  }),
-                });
-
-                const dentist = {
-                  ...newDentist,
-                  surname: newDentist.surname || "",
-                };
-
-                setDentists((prev) => [...prev, dentist]);
+              onCreated={(newDentist) => {
+                setDentists((prev) => [...prev, { ...newDentist, surname: newDentist.surname ?? "" }]);
                 onChange(newDentist.id);
               }}
             />
@@ -119,9 +84,7 @@ export default function SelectDentistsOnAppointments({
       </Select>
 
       {(error || loadError) && (
-        <p className="text-sm text-red-600">
-          {error || loadError}
-        </p>
+        <p className="text-sm text-red-600">{error || loadError}</p>
       )}
     </div>
   );

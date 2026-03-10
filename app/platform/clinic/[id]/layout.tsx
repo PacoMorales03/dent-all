@@ -4,9 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 
-function isValidUUID(uuid: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);
-}
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function Layout({
   children,
@@ -16,34 +14,24 @@ export default async function Layout({
   params: Promise<{ id: string }>;
 }) {
   const { userId } = await auth();
-
   const { id: clinicId } = await params;
 
-  if (!clinicId || !isValidUUID(clinicId)) {
-    notFound();
-  }
+  // ✅ Validación de UUID antes de tocar la BD
+  if (!clinicId || !UUID_REGEX.test(clinicId)) notFound();
 
   const clinicUser = await prisma.clinicUser.findUnique({
-    where: {
-      clinicId_userId: {
-        clinicId,
-        userId,
-      },
-    },
-    select: {
-      clinicId: true,
-    },
+    where: { clinicId_userId: { clinicId, userId } },
+    select: { clinicId: true, role: true },
   });
 
-  if (!clinicUser) {
-    notFound();
-  }
+  if (!clinicUser) notFound();
 
   return (
     <SidebarProvider>
-      <AppSidebar />
-      <main>
-        <SidebarTrigger className="fixed top-15 z-50"/>
+  
+      <AppSidebar clinicId={clinicId} role={clinicUser.role} />
+      <main className="flex-1">
+        <SidebarTrigger className="fixed top-15 z-50" />
         {children}
       </main>
     </SidebarProvider>
