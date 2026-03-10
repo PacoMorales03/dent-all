@@ -7,18 +7,20 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Clinic {
-  id             String           @id(map: "clinica_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name           String?
-  phone          String?
-  address        String?
-  Appointments   Appointments[]
-  Cabinets       Cabinets[]
-  ClinicDentists ClinicDentists[]
-  ClinicPatients ClinicPatients[]
-  ClinicUser     ClinicUser[]
+  id               String            @id(map: "clinica_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String?
+  phone            String?
+  address          String?
+  Appointments     Appointments[]
+  Cabinets         Cabinets[]
+  ClinicDentists   ClinicDentists[]
+  ClinicInviteCode ClinicInviteCode?
+  ClinicPatients   ClinicPatients[]
+  ClinicUser       ClinicUser[]
 }
 
 model ClinicUser {
@@ -110,6 +112,15 @@ model ClinicDentists {
   Dentist   Dentist @relation(fields: [DentistId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_2")
 
   @@id([ClinicId, DentistId], map: "pk_clinicDentist")
+}
+
+model ClinicInviteCode {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clinicId  String?      @unique @db.Uuid
+  role      clinic_role?
+  expiresAt String?
+  createdBy String?
+  Clinic    Clinic?      @relation(fields: [clinicId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "constraint_1")
 }
 
 enum clinic_role {
